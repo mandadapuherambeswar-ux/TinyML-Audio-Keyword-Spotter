@@ -10,12 +10,41 @@ An ultra-compact, deterministic **TinyML Audio Keyword Spotting (KWS) Engine** f
 
 ---
 
+## 🔌 Hardware Circuit Diagram & Digital Audio Interface
+
+```
+               +3.3V Power Bus
+                     |
+ +-------------------+---------------------------------------------------+
+ |                   |                                                   |
+ |                  3V3                                                  |
+ |                                                                       |
+ |   [ STM32F401 BlackPill MCU ]                                         |
+ |                                                                       |
+ |       (I2S3 SCK)        (I2S3 WS)        (I2S3 SD)                    |
+ |          PB3               PA15             PB5                       |
+ +-----------+-----------------+----------------+------------------------+
+             |                 |                |
+             v                 v                v
+ +-----------+-----------------+----------------+------------------------+
+ |          SCK                WS               SD                       |
+ |                                                                       |
+ |               [ INMP441 / SPH0645 MEMS Microphone Module ]            |
+ |                                                                       |
+ |          VDD               GND              L/R                       |
+ +-----------+-----------------+----------------+------------------------+
+             |                 |                |
+           +3.3V              GND              GND (Left Channel Mode)
+```
+
+---
+
 ## 🏛️ Edge AI Processing Pipeline
 
 ```mermaid
 graph LR
     subgraph Audio ["Acoustic Input (16 kHz, 16-bit PCM)"]
-        MIC["Microphone / I2S DMA Buffer (32 ms Window)"]
+        MIC["INMP441 MEMS Mic / I2S DMA Buffer (32 ms Frame)"]
     end
 
     subgraph Feature ["Digital Signal Processing (MFCC)"]
@@ -43,16 +72,15 @@ graph LR
 
 ---
 
-## ⚡ Core Features
+## ⚡ Hardware Pinout Matrix
 
-1. **Deterministic MFCC Audio Preprocessing**:
-   - Computes 13 MFCC spectral coefficients over a 512-sample (32 ms) sliding audio frame.
-   - Pre-computed triangular Mel filterbank weights and Hanning windowing for zero dynamic allocation.
-2. **Quantized Edge Neural Network**:
-   - Fixed-point inference with sub-14 ms execution latency on an 84 MHz STM32F401.
-   - Flash Memory footprint: **< 12.8 KB**, RAM usage: **< 3.4 KB**.
-3. **Keyword Classes**:
-   - Classifies streaming acoustic frames into: `SILENCE`, `UNKNOWN`, `KEYWORD: 'YES'`, and `KEYWORD: 'NO'`.
+| Microphone Pin | MCU Pin | Alternate Function | Purpose |
+| :--- | :--- | :--- | :--- |
+| **INMP441 SCK**| `PB3`  | `AF6` (SPI3_SCK / I2S3_CK) | Audio Bit Clock (512 kHz) |
+| **INMP441 WS** | `PA15` | `AF6` (SPI3_NSS / I2S3_WS) | Word Select / Frame Clock (16 kHz) |
+| **INMP441 SD** | `PB5`  | `AF6` (SPI3_MOSI / I2S3_SD)| Serial Data Output from Microphone |
+| **INMP441 L/R**| `GND`  | None (Hardware Tie)        | Left Audio Channel Select |
+| **Status LED** | `PA5`  | GPIO Output                | Keyword Detected Indicator |
 
 ---
 
@@ -60,12 +88,12 @@ graph LR
 
 ```bash
 # Compile TinyML engine
-gcc -Wall -Wextra -Iinclude src/mfcc_extractor.c src/nn_inference.c src/main.c -lm -o tinyml_kws
+gcc -Wall -Wextra -Iinclude src/mfcc_extractor.c src/nn_inference.c src/i2s_mic_driver.c src/main.c -lm -o tinyml_kws
 
 # Run inference simulation
 ./tinyml_kws
 
-# Generate audio feature vectors
+# Generate synthetic audio feature vectors
 python tools/audio_feature_generator.py
 ```
 
